@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright (c) 2019, 2021 Oracle and/or its affiliates. All rights reserved.
+    Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
 
     This program and the accompanying materials are made available under the
     terms of the Eclipse Public License v. 2.0 which is available at
@@ -22,7 +22,7 @@
     <description>Comprehensive and universal persistence framework for Java.</description>
     <groupId>org.eclipse.persistence</groupId>
     <artifactId>org.eclipse.persistence.parent</artifactId>
-    <version>3.0.3-SNAPSHOT</version>
+    <version>3.0.4-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <parent>
@@ -166,8 +166,11 @@
         <test.xml.platform>org.eclipse.persistence.platform.xml.jaxp.JAXPPlatform</test.xml.platform>
         <test.xml.parser>org.eclipse.persistence.platform.xml.jaxp.JAXPParser</test.xml.parser>
 
+        <!--Documentation properties-->
+        <docs.status>DRAFT</docs.status>
+
         <!--Eclipse Dependencies version-->
-        <eclipselink.asm.version>9.1.1</eclipselink.asm.version>
+        <eclipselink.asm.version>9.6.0</eclipselink.asm.version>
         <activation.version>2.0.1</activation.version>
         <annotation.version>2.0.0</annotation.version>
         <cdi.version>3.0.0</cdi.version>
@@ -183,7 +186,7 @@
         <json.version>2.0.0</json.version>
         <jpa.api.version>3.0.0</jpa.api.version>
         <mail.version>2.0.1</mail.version>
-        <oracle.ddlparser.version>3.0.0</oracle.ddlparser.version>
+        <oracle.ddlparser.version>3.0.1</oracle.ddlparser.version>
         <org.glassfish.corba.version>4.2.4</org.glassfish.corba.version>
         <resource.version>2.0.0</resource.version>
         <servlet.version>5.0.0</servlet.version>
@@ -196,7 +199,7 @@
         <!-- CQ #23046 -->
         <apache.felix.framework.version>7.0.0</apache.felix.framework.version>
         <!-- CQ #21133 -->
-        <ant.version>1.10.9</ant.version>
+        <ant.version>1.10.12</ant.version>
         <commonj.sdo.version>2.1.1</commonj.sdo.version>
         <derby.version>10.14.2.0</derby.version>
         <!-- CQ #21134, 21135, 21136, 21137 -->
@@ -204,19 +207,19 @@
         <hamcrest.version>1.3</hamcrest.version>
         <!-- CQ #23048 -->
         <hibernate.version>7.0.1.Final</hibernate.version>
-        <checkstyle.version>8.40</checkstyle.version>
+        <checkstyle.version>10.1</checkstyle.version>
         <!-- CQ #23049 -->
         <jgroups.version>4.2.11.Final</jgroups.version>
         <jmh.version>1.27</jmh.version>
         <junit.version>4.13.2</junit.version>
         <!-- CQ #21138 -->
         <mongodb.version>3.12.7</mongodb.version>
-        <mysql.version>5.1.49</mysql.version>
+        <mysql.version>8.0.28</mysql.version>
         <mssql.version>9.2.0.jre8</mssql.version>
         <pgsql.version>42.2.18</pgsql.version>
         <!-- CQ #21139, 21140 -->
         <logback.version>1.3.0-alpha5</logback.version>
-        <oracle.jdbc.version>19.3.0.0</oracle.jdbc.version>
+        <oracle.jdbc.version>21.3.0.0</oracle.jdbc.version>
         <!-- CQ #2437 -->
         <oracle.aqapi.version>19.3.0.0</oracle.aqapi.version>
         <oracle.fmw.version>12.2.1-2-0</oracle.fmw.version>
@@ -233,6 +236,14 @@
         <weblogic.version>12.2.1-3</weblogic.version>
         <wildfly.version>18.0.0.Final</wildfly.version>
         <wsdl4j.version>1.6.3</wsdl4j.version>
+
+        <!--Documentation Dependencies version-->
+        <asciidoctorj.version>2.5.6</asciidoctorj.version>
+        <asciidoctorj.pdf.version>2.3.0</asciidoctorj.pdf.version>
+        <asciidoctorj.epub.version>1.5.1</asciidoctorj.epub.version>
+        <!--JRuby this version works with asciidoctorj-pdf-->
+        <jruby.version>9.2.21.0</jruby.version>
+
     </properties>
 
     <!-- Default modules set and added to by all profiles -->
@@ -240,8 +251,10 @@
         <module>jpa/org.eclipse.persistence.jpa.jpql</module>
 
         <module>foundation/org.eclipse.persistence.core</module>
+        <module>foundation/org.eclipse.persistence.core.test.framework</module>
 
         <module>jpa/org.eclipse.persistence.jpa</module>
+        <module>jpa/org.eclipse.persistence.jpa.test.framework</module>
         <module>jpa/org.eclipse.persistence.jpa.modelgen</module>
         <module>jpa/org.eclipse.persistence.jpars</module>
 
@@ -761,37 +774,37 @@
             </dependency>
             <!-- All files as a Oracle JDBC driver CQ #21154 -->
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.jdbc</groupId>
                 <artifactId>ojdbc8</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.xml</groupId>
                 <artifactId>xmlparserv2</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.jdbc</groupId>
                 <artifactId>ucp</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.xml</groupId>
                 <artifactId>xdb</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.observability</groupId>
                 <artifactId>dms</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.ha</groupId>
                 <artifactId>simplefan</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.ha</groupId>
                 <artifactId>ons</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
@@ -803,7 +816,7 @@
                                 </dependency>
             -->
             <dependency>
-                <groupId>com.oracle.ojdbc</groupId>
+                <groupId>com.oracle.database.nls</groupId>
                 <artifactId>orai18n</artifactId>
                 <version>${oracle.jdbc.version}</version>
             </dependency>
@@ -1176,6 +1189,33 @@
                             </module>
                         </checkstyleRules>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.asciidoctor</groupId>
+                    <artifactId>asciidoctor-maven-plugin</artifactId>
+                    <version>2.2.2</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.jruby</groupId>
+                            <artifactId>jruby-complete</artifactId>
+                            <version>${jruby.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.asciidoctor</groupId>
+                            <artifactId>asciidoctorj</artifactId>
+                            <version>${asciidoctorj.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.asciidoctor</groupId>
+                            <artifactId>asciidoctorj-pdf</artifactId>
+                            <version>${asciidoctorj.pdf.version}</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.asciidoctor</groupId>
+                            <artifactId>asciidoctorj-epub3</artifactId>
+                            <version>${asciidoctorj.epub.version}</version>
+                        </dependency>
+                    </dependencies>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -1662,7 +1702,7 @@
                 <test.properties.file>${user.home}/${test.oracle.properties.file}</test.properties.file>
                 <test.properties.fileName>${test.oracle.properties.file}</test.properties.fileName>
                 <!--Used by sql-maven-plugin-->
-                <db.driver.groupId>com.oracle.ojdbc</db.driver.groupId>
+                <db.driver.groupId>com.oracle.database.jdbc</db.driver.groupId>
                 <db.driver.artifactId>ojdbc8</db.driver.artifactId>
                 <db.driver.version>${oracle.jdbc.version}</db.driver.version>
                 <test.skip.in-memory.db>true</test.skip.in-memory.db>
@@ -1849,9 +1889,7 @@
                 <!--Helper parent pom for server side test modules-->
                 <module>testing/server</module>
                 <module>testing/server-oracle</module>
-                <module>foundation/org.eclipse.persistence.core.test.framework</module>
                 <module>foundation/eclipselink.core.test</module>
-                <module>jpa/org.eclipse.persistence.jpa.test.framework</module>
                 <module>sdo/eclipselink.sdo.test.server</module>
 
                 <!--JPA test modules-->
@@ -1893,6 +1931,13 @@
                 <!--JPA test module-->
                 <!--TODO sdoapi dependency resolution is not solved-->
                 <module>jpa/eclipselink.jpa.oracle.test</module>
+            </modules>
+        </profile>
+        <profile>
+            <id>docs</id>
+            <modules>
+                <!--Parent documentation module-->
+                <module>docs</module>
             </modules>
         </profile>
     </profiles>

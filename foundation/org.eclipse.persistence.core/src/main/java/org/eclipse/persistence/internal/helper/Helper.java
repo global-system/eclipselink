@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1998, 2019 Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 1998, 2018 IBM Corporation. All rights reserved.
+ * Copyright (c) 1998, 2022 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -38,8 +38,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -64,10 +62,6 @@ import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.internal.core.helper.CoreHelper;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
 import org.eclipse.persistence.internal.security.PrivilegedAccessHelper;
-import org.eclipse.persistence.internal.security.PrivilegedClassForName;
-import org.eclipse.persistence.internal.security.PrivilegedGetField;
-import org.eclipse.persistence.internal.security.PrivilegedGetMethod;
-import org.eclipse.persistence.internal.security.PrivilegedNewInstanceFromClass;
 import org.eclipse.persistence.logging.AbstractSessionLog;
 import org.eclipse.persistence.logging.SessionLog;
 
@@ -522,25 +516,14 @@ public class Helper extends CoreHelper implements Serializable {
         return res;
     }
 
-    public static Class getClassFromClasseName(String className, ClassLoader classLoader){
-        Class convertedClass = null;
-        if(className==null){
+    public static <T> Class<T> getClassFromClasseName(final String className, final ClassLoader classLoader) {
+        if (className == null) {
             return null;
         }
-        try{
-            if (PrivilegedAccessHelper.shouldUsePrivilegedAccess()){
-                try {
-                    convertedClass = AccessController.doPrivileged(new PrivilegedClassForName(className, true, classLoader));
-                } catch (PrivilegedActionException exception) {
-                    throw ValidationException.classNotFoundWhileConvertingClassNames(className, exception.getException());
-                }
-            } else {
-                convertedClass = org.eclipse.persistence.internal.security.PrivilegedAccessHelper.getClassForName(className, true, classLoader);
-            }
-            return convertedClass;
-        } catch (ClassNotFoundException exc){
-            throw ValidationException.classNotFoundWhileConvertingClassNames(className, exc);
-        }
+        return PrivilegedAccessHelper.callDoPrivilegedWithException(
+                () -> PrivilegedAccessHelper.getClassForName(className, true, classLoader),
+                (ex) -> ValidationException.classNotFoundWhileConvertingClassNames(className, ex)
+        );
     }
 
     public static String getComponentTypeNameFromArrayString(String aString) {
@@ -832,6 +815,21 @@ public class Helper extends CoreHelper implements Serializable {
     }
 
     /**
+     * Copy an array of boolean to a new array
+     * @param original
+     * @return
+     */
+    public static boolean[] copyBooleanArray(boolean[] original){
+        if (original == null){
+            return null;
+        }
+        int length = original.length;
+        boolean[] copy = new boolean[length];
+        System.arraycopy(original, 0, copy, 0, length);
+        return copy;
+    }
+
+    /**
      * Return a string containing the platform-appropriate
      * characters for carriage return.
      */
@@ -1005,15 +1003,16 @@ public class Helper extends CoreHelper implements Serializable {
      * the superclass is checked, and so on, recursively.
      * Set accessible to true, so we can access private/package/protected fields.
      */
-    public static Field getField(Class javaClass, String fieldName) throws NoSuchFieldException {
-        if (PrivilegedAccessHelper.shouldUsePrivilegedAccess()){
-            try {
-                return AccessController.doPrivileged(new PrivilegedGetField(javaClass, fieldName, true));
-            } catch (PrivilegedActionException exception) {
-                throw (NoSuchFieldException)exception.getException();
-            }
-        } else {
-            return PrivilegedAccessHelper.getField(javaClass, fieldName, true);
+    public static Field getField(final Class<?> javaClass, final String fieldName) throws NoSuchFieldException {
+        try {
+            return PrivilegedAccessHelper.callDoPrivilegedWithException(
+                    () -> PrivilegedAccessHelper.getField(javaClass, fieldName, true)
+            );
+        } catch (NoSuchFieldException | RuntimeException ex) {
+            throw ex;
+        // This indicates unexpected problem in the code
+        } catch (Exception ex) {
+            throw new RuntimeException(String.format("Getting %s field failed", fieldName), ex);
         }
     }
 
@@ -1037,62 +1036,34 @@ public class Helper extends CoreHelper implements Serializable {
      * superclass is checked, and so on, recursively. Set accessible to true,
      * so we can access private/package/protected methods.
      */
-    public static Method getDeclaredMethod(Class javaClass, String methodName, Class[] methodParameterTypes) throws NoSuchMethodException {
-        if (PrivilegedAccessHelper.shouldUsePrivilegedAccess()){
-            try {
-                return AccessController.doPrivileged(
-                    new PrivilegedGetMethod(javaClass, methodName, methodParameterTypes, true));
-            }
-            catch (PrivilegedActionException pae){
-                if (pae.getCause() instanceof NoSuchMethodException){
-                    throw (NoSuchMethodException)pae.getCause();
-                }
-                else {
-                    // really shouldn't happen
-                    throw (RuntimeException)pae.getCause();
-                }
-            }
-        } else {
-            return PrivilegedAccessHelper.getMethod(javaClass, methodName, methodParameterTypes, true);
+    public static Method getDeclaredMethod(final Class<?> javaClass, final String methodName, final Class<?>[] methodParameterTypes) throws NoSuchMethodException {
+        try {
+            return PrivilegedAccessHelper.callDoPrivilegedWithException(
+                    () -> PrivilegedAccessHelper.getMethod(javaClass, methodName, methodParameterTypes, true)
+            );
+        } catch (NoSuchMethodException | RuntimeException ex) {
+            throw ex;
+        // This indicates unexpected problem in the code
+        } catch (Exception ex) {
+            throw new RuntimeException(String.format("Getting %s method failed", methodName), ex);
         }
     }
 
     /**
      * Return the class instance from the class
      */
-    public static Object getInstanceFromClass(Class classFullName) {
+    public static Object getInstanceFromClass(final Class<?> classFullName) {
         if (classFullName == null) {
             return null;
         }
-
-        try {
-            if (PrivilegedAccessHelper.shouldUsePrivilegedAccess()){
-                try {
-                    return AccessController.doPrivileged(new PrivilegedNewInstanceFromClass(classFullName));
-                } catch (PrivilegedActionException exception) {
-                    Exception throwableException = exception.getException();
-                    if (throwableException instanceof InstantiationException) {
-                        ValidationException exc = new ValidationException();
-                        exc.setInternalException(throwableException);
-                        throw exc;
-                    } else {
-                        ValidationException exc = new ValidationException();
-                        exc.setInternalException(throwableException);
-                        throw exc;
-                    }
+        return PrivilegedAccessHelper.callDoPrivilegedWithException(
+                () -> PrivilegedAccessHelper.newInstanceFromClass(classFullName),
+                (ex) -> {
+                    final ValidationException exc = new ValidationException();
+                    exc.setInternalException(ex);
+                    return exc;
                 }
-            } else {
-                return PrivilegedAccessHelper.newInstanceFromClass(classFullName);
-            }
-        } catch (InstantiationException notInstantiatedException) {
-            ValidationException exception = new ValidationException();
-            exception.setInternalException(notInstantiatedException);
-            throw exception;
-        } catch (IllegalAccessException notAccessedException) {
-            ValidationException exception = new ValidationException();
-            exception.setInternalException(notAccessedException);
-            throw exception;
-        }
+        );
     }
 
     /**

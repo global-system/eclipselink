@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1998, 2021 Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 1998, 2021 IBM Corporation. All rights reserved.
+ * Copyright (c) 1998, 2023 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2023 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Hashtable;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Vector;
 import java.util.regex.Pattern;
 
@@ -49,7 +50,7 @@ import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.expressions.Expression;
 import org.eclipse.persistence.expressions.ExpressionOperator;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseCall;
-import org.eclipse.persistence.internal.databaseaccess.DatasourceCall;
+import org.eclipse.persistence.internal.databaseaccess.DatasourceCall.ParameterType;
 import org.eclipse.persistence.internal.databaseaccess.FieldTypeDefinition;
 import org.eclipse.persistence.internal.expressions.ExpressionSQLPrinter;
 import org.eclipse.persistence.internal.expressions.FunctionExpression;
@@ -59,7 +60,6 @@ import org.eclipse.persistence.internal.helper.ClassConstants;
 import org.eclipse.persistence.internal.helper.DatabaseField;
 import org.eclipse.persistence.internal.helper.DatabaseTable;
 import org.eclipse.persistence.internal.helper.Helper;
-import org.eclipse.persistence.internal.helper.NonSynchronizedVector;
 import org.eclipse.persistence.internal.localization.ExceptionLocalization;
 import org.eclipse.persistence.internal.sessions.AbstractSession;
 import org.eclipse.persistence.internal.sessions.DatabaseSessionImpl;
@@ -204,14 +204,6 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
 
     /**
      * INTERNAL:
-     * Build operator.
-     */
-    public ExpressionOperator atan2Operator() {
-        return ExpressionOperator.simpleTwoArgumentFunction(ExpressionOperator.Atan2, "ATAN2");
-    }
-
-    /**
-     * INTERNAL:
      */
     @Override
     protected Hashtable buildFieldTypes() {
@@ -250,6 +242,14 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         //bug 5871089 the default generator requires definitions based on all java types
         fieldTypeMapping.put(java.util.Calendar.class, new FieldTypeDefinition("TIMESTAMP"));
         fieldTypeMapping.put(java.util.Date.class, new FieldTypeDefinition("TIMESTAMP"));
+        // Local classes have no TZ information included
+        fieldTypeMapping.put(java.time.LocalDate.class, new FieldTypeDefinition("DATE"));
+        fieldTypeMapping.put(java.time.LocalDateTime.class, new FieldTypeDefinition("TIMESTAMP"));
+        fieldTypeMapping.put(java.time.LocalTime.class, new FieldTypeDefinition("TIMESTAMP"));
+        // Offset classes contain an offset from UTC/Greenwich in the ISO-8601 calendar system so TZ should be included
+        // but TIMESTAMP WITH TIME ZONE is not supported until 10g
+        fieldTypeMapping.put(java.time.OffsetDateTime.class, new FieldTypeDefinition("TIMESTAMP"));
+        fieldTypeMapping.put(java.time.OffsetTime.class, new FieldTypeDefinition("TIMESTAMP"));
 
         return fieldTypeMapping;
     }
@@ -587,14 +587,14 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
         addOperator(operatorOuterJoin());
         addOperator(logOperator());
         addOperator(ExpressionOperator.simpleTwoArgumentFunction(ExpressionOperator.Concat, "CONCAT"));
-        addOperator(todayOperator());
-        addOperator(currentDateOperator());
-        addOperator(currentTimeOperator());
+        addOperator(ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.Today, "SYSDATE"));
+        addOperator(ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.CurrentDate, "TO_DATE(CURRENT_DATE)"));
+        addOperator(ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.CurrentTime, "SYSDATE"));
         addOperator(ExpressionOperator.truncateDate());
         addOperator(ExpressionOperator.newTime());
         addOperator(ExpressionOperator.ifNull());
-        addOperator(atan2Operator());
-        addOperator(ExpressionOperator.oracleDateName());
+        addOperator(ExpressionOperator.simpleTwoArgumentFunction(ExpressionOperator.Atan2, "ATAN2"));
+        addOperator(oracleDateName());
         addOperator(operatorLocate());
         addOperator(operatorLocate2());
         addOperator(regexpOperator());
@@ -602,10 +602,25 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     /**
+     * Create the outer join operator for this platform
+     */
+    protected static ExpressionOperator operatorOuterJoin() {
+        ExpressionOperator result = new ExpressionOperator();
+        result.setSelector(ExpressionOperator.EqualOuterJoin);
+        List<String> v = new ArrayList<>();
+        v.add(" (+) = ");
+        result.printsAs(v);
+        result.bePostfix();
+        result.setNodeClass(RelationExpression.class);
+        return result;
+
+    }
+
+    /**
      * INTERNAL:
      * Create the EXCEPT operator, MINUS in Oracle.
      */
-    public static ExpressionOperator exceptOperator() {
+    protected static ExpressionOperator exceptOperator() {
         ExpressionOperator exOperator = new ExpressionOperator();
         exOperator.setType(ExpressionOperator.FunctionOperator);
         exOperator.setSelector(ExpressionOperator.Except);
@@ -619,22 +634,93 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
      * INTERNAL:
      * Create the REGEXP_LIKE operator.
      */
-    public static ExpressionOperator regexpOperator() {
+    protected static ExpressionOperator regexpOperator() {
         ExpressionOperator result = new ExpressionOperator();
         result.setSelector(ExpressionOperator.Regexp);
         result.setType(ExpressionOperator.FunctionOperator);
-        Vector v = NonSynchronizedVector.newInstance(3);
+        List<String> v = new ArrayList<>(3);
         v.add("REGEXP_LIKE(");
         v.add(", ");
         v.add(")");
         result.printsAs(v);
         result.bePrefix();
         result.setNodeClass(ClassConstants.FunctionExpression_Class);
-        v = NonSynchronizedVector.newInstance(2);
+        v = new ArrayList<>(2);
         v.add(".regexp(");
         v.add(")");
         result.printsJavaAs(v);
         return result;
+    }
+
+    /**
+     * INTERNAL:
+     * Override the default locate operator
+     */
+    protected static ExpressionOperator operatorLocate() {
+        ExpressionOperator result = new ExpressionOperator();
+        result.setSelector(ExpressionOperator.Locate);
+        List<String> v = new ArrayList<>(3);
+        v.add("INSTR(");
+        v.add(", ");
+        v.add(")");
+        result.printsAs(v);
+        result.bePrefix();
+        result.setNodeClass(RelationExpression.class);
+        return result;
+    }
+
+    /**
+     * INTERNAL:
+     * Override the default locate operator
+     */
+    protected static ExpressionOperator operatorLocate2() {
+        ExpressionOperator result = new ExpressionOperator();
+        result.setSelector(ExpressionOperator.Locate2);
+        List<String> v = new ArrayList<>(4);
+        v.add("INSTR(");
+        v.add(", ");
+        v.add(", ");
+        v.add(")");
+        result.printsAs(v);
+        result.bePrefix();
+        result.setNodeClass(RelationExpression.class);
+        return result;
+    }
+
+    /**
+     *  Create the log operator for this platform
+     */
+    protected static ExpressionOperator logOperator() {
+        ExpressionOperator result = new ExpressionOperator();
+        result.setSelector(ExpressionOperator.Log);
+        List<String> v = new ArrayList<>(2);
+        v.add("LOG(10,");
+        v.add(")");
+        result.printsAs(v);
+        result.bePrefix();
+        result.setNodeClass(FunctionExpression.class);
+        return result;
+
+    }
+
+    /**
+     * INTERNAL:
+     * Oracle equivalent to DATENAME is TO_CHAR.
+     */
+    protected static ExpressionOperator oracleDateName() {
+        ExpressionOperator exOperator = new ExpressionOperator();
+        exOperator.setType(ExpressionOperator.FunctionOperator);
+        exOperator.setSelector(ExpressionOperator.DateName);
+        List<String> v = new ArrayList<>(3);
+        v.add("TO_CHAR(");
+        v.add(", '");
+        v.add("')");
+        exOperator.printsAs(v);
+        exOperator.bePrefix();
+        int[] indices = { 1, 0 };
+        exOperator.setArgumentIndices(indices);
+        exOperator.setNodeClass(ClassConstants.FunctionExpression_Class);
+        return exOperator;
     }
 
     /**
@@ -650,22 +736,6 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     @Override
     public boolean isOracle() {
         return true;
-    }
-
-    /**
-     *  Create the log operator for this platform
-     */
-    protected ExpressionOperator logOperator() {
-        ExpressionOperator result = new ExpressionOperator();
-        result.setSelector(ExpressionOperator.Log);
-        Vector v = NonSynchronizedVector.newInstance(2);
-        v.addElement("LOG(10,");
-        v.addElement(")");
-        result.printsAs(v);
-        result.bePrefix();
-        result.setNodeClass(FunctionExpression.class);
-        return result;
-
     }
 
     /**
@@ -731,56 +801,6 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     /**
-     * Create the outer join operator for this platform
-     */
-    protected ExpressionOperator operatorOuterJoin() {
-        ExpressionOperator result = new ExpressionOperator();
-        result.setSelector(ExpressionOperator.EqualOuterJoin);
-        Vector v = NonSynchronizedVector.newInstance(2);
-        v.addElement(" (+) = ");
-        result.printsAs(v);
-        result.bePostfix();
-        result.setNodeClass(RelationExpression.class);
-        return result;
-
-    }
-
-    /**
-     * INTERNAL:
-     * Override the default locate operator
-     */
-    protected ExpressionOperator operatorLocate() {
-        ExpressionOperator result = new ExpressionOperator();
-        result.setSelector(ExpressionOperator.Locate);
-        Vector v = NonSynchronizedVector.newInstance(2);
-        v.addElement("INSTR(");
-        v.addElement(", ");
-        v.addElement(")");
-        result.printsAs(v);
-        result.bePrefix();
-        result.setNodeClass(RelationExpression.class);
-        return result;
-    }
-
-    /**
-     * INTERNAL:
-     * Override the default locate operator
-     */
-    protected ExpressionOperator operatorLocate2() {
-        ExpressionOperator result = new ExpressionOperator();
-        result.setSelector(ExpressionOperator.Locate2);
-        Vector v = NonSynchronizedVector.newInstance(2);
-        v.addElement("INSTR(");
-        v.addElement(", ");
-        v.addElement(", ");
-        v.addElement(")");
-        result.printsAs(v);
-        result.bePrefix();
-        result.setNodeClass(RelationExpression.class);
-        return result;
-    }
-
-    /**
      * INTERNAL:
      * Append the receiver's field 'NULL' constraint clause to a writer.
      */
@@ -811,9 +831,9 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     @Override
-    public String getProcedureArgument(String name, Object parameter, Integer parameterType, 
+    public String getProcedureArgument(String name, Object parameter, ParameterType parameterType, 
             StoredProcedureCall call, AbstractSession session) {
-        if(name != null && DatasourceCall.IN.equals(parameterType) && !call.usesBinding(session)) {
+        if(name != null && ParameterType.IN.equals(parameterType) && !call.usesBinding(session)) {
             return name + "=>" + "?";
         }
         return "?";
@@ -907,21 +927,6 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     /**
-     * Create the sysdate operator for this platform
-     */
-    protected ExpressionOperator todayOperator() {
-        return ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.Today, "SYSDATE");
-    }
-
-    protected ExpressionOperator currentDateOperator() {
-        return ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.CurrentDate, "TO_DATE(CURRENT_DATE)");
-    }
-
-    protected ExpressionOperator currentTimeOperator() {
-        return ExpressionOperator.simpleFunctionNoParentheses(ExpressionOperator.CurrentTime, "SYSDATE");
-    }
-
-    /**
      * INTERNAL:
      * Indicates whether this Oracle platform can unwrap Oracle connection.
      */
@@ -958,13 +963,15 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     protected String MIN_ROW = ") WHERE rnum > ";
     // Bug #453208
     protected String LOCK_START_PREFIX = " AND (";
+    protected String LOCK_START_PREFIX_WHERE = " WHERE (";
     protected String LOCK_START_SUFFIX = ") IN (";
-    protected String LOCK_END = ") FOR UPDATE";
+    protected String LOCK_END = " FOR UPDATE";
     protected String SELECT_ID_PREFIX = "SELECT ";
     protected String SELECT_ID_SUFFIX = " FROM (SELECT ";
     protected String FROM_ID = ", ROWNUM rnum  FROM (";
     protected String END_FROM_ID = ") ";
     protected String ORDER_BY_ID = " ORDER BY ";
+    protected String BRACKET_END = " ) ";
 
     /**
      * INTERNAL:
@@ -995,7 +1002,7 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
                     // Workaround can exist for this specific case
                     Vector fields = new Vector();
                     statement.enableFieldAliasesCaching();
-                    String queryString = printOmittingForUpdate(statement, printer, fields);
+                    String queryString = printOmittingOrderByForUpdateUnion(statement, printer, fields);
                     duplicateCallParameters(call);
                     call.setFields(fields);
 
@@ -1030,6 +1037,13 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
                     printer.printParameter(DatabaseCall.MAXROW_FIELD);
                     printer.printString(MIN_ROW);
                     printer.printParameter(DatabaseCall.FIRSTRESULT_FIELD);
+                    printer.printString(BRACKET_END);
+                    try {
+                        statement.printSQLOrderByClause(printer);
+                        statement.printSQLUnionClause(printer);
+                    } catch (IOException exception) {
+                        throw ValidationException.fileError(exception);
+                    }
                     printer.printString(LOCK_END);
                 } else {
                     throw new UnsupportedOperationException(ExceptionLocalization.buildMessage("ora_pessimistic_locking_with_rownum"));
@@ -1064,23 +1078,34 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     @SuppressWarnings("unchecked")
     // Bug #453208 - Duplicate call parameters since the query is performed twice
     private void duplicateCallParameters(DatabaseCall call) {
-        ArrayList newParameterList = new ArrayList(call.getParameters());
+        List newParameterList = new ArrayList(call.getParameters());
         newParameterList.addAll(call.getParameters());
         call.setParameters(newParameterList);
-        ArrayList<Integer> newParameterTypesList = new ArrayList(call.getParameterTypes());
+        List<ParameterType> newParameterTypesList = new ArrayList<>(call.getParameterTypes());
         newParameterTypesList.addAll(call.getParameterTypes());
         call.setParameterTypes(newParameterTypesList);
     }
 
     @SuppressWarnings("unchecked")
-    private String printOmittingForUpdate(SQLSelectStatement statement, ExpressionSQLPrinter printer, Vector fields) {
+    private String printOmittingOrderByForUpdateUnion(SQLSelectStatement statement, ExpressionSQLPrinter printer, Vector fields) {
         boolean originalShouldPrintForUpdate = this.shouldPrintForUpdateClause;
         Writer originalWriter = printer.getWriter();
+        Vector selectFields = null;
 
         this.shouldPrintForUpdateClause = false;
         printer.setWriter(new StringWriter());
 
-        fields.addAll(statement.printSQL(printer));
+        try {
+            selectFields = statement.printSQLSelect(printer);
+            statement.printSQLWhereKeyWord(printer);
+            statement.printSQLWhereClause(printer);
+            statement.printSQLHierarchicalQueryClause(printer);
+            statement.printSQLGroupByClause(printer);
+            statement.printSQLHavingClause(printer);
+        } catch (IOException exception) {
+            throw ValidationException.fileError(exception);
+        }
+        fields.addAll(selectFields);
         String query = printer.getWriter().toString();
 
         this.shouldPrintForUpdateClause = originalShouldPrintForUpdate;
@@ -1090,7 +1115,11 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     private void printLockStartWithPrimaryKeyFields(SQLSelectStatement statement, ExpressionSQLPrinter printer) {
-        printer.printString(LOCK_START_PREFIX);
+        if (statement.getWhereClause() == null) {
+            printer.printString(LOCK_START_PREFIX_WHERE);
+        } else {
+            printer.printString(LOCK_START_PREFIX);
+        }
 
         Iterator<DatabaseField> iterator = statement.getQuery().getDescriptor().getPrimaryKeyFields().iterator();
         while (iterator.hasNext()) {
@@ -1188,15 +1217,17 @@ public class OraclePlatform extends org.eclipse.persistence.platform.database.Da
     }
 
     @Override
-    public Expression createExpressionFor(DatabaseField field, Expression builder) {
+    public Expression createExpressionFor(DatabaseField field, Expression builder, String fieldClassificationClassName) {
         if (field.getType() == java.sql.Clob.class || 
-                field.getType() == java.sql.Blob.class) {
+                field.getType() == java.sql.Blob.class ||
+                "java.sql.Clob".equals(fieldClassificationClassName) ||
+                "java.sql.Blob".equals(fieldClassificationClassName)) {
             Expression subExp1 = builder.getField(field);
             Expression subExp2 = builder.getParameter(field);
             subExp1 = subExp1.getFunction("dbms_lob.compare", subExp2);
             return subExp1.equal(0);
         }
-        return super.createExpressionFor(field, builder);
+        return super.createExpressionFor(field, builder, fieldClassificationClassName);
     }
 
     // Value of shouldCheckResultTableExistsQuery must be true.

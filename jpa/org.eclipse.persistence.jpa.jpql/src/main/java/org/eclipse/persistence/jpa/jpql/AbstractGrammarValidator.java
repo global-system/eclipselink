@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2006, 2021 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2006, 2022 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -1167,6 +1168,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
     /**
      * Returns the registered helper that was cached with the given id.
      *
+     * @param <T> This is the type parameter
      * @param id The key used to retrieve the cached helper, if one was cached
      * @return Either the cached helper or <code>null</code> if no helper was previously cached for
      * the given id
@@ -1681,6 +1683,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
      * Validates the content of an {@link AbstractDoubleEncapsulatedExpression}, which encapsulates
      * two expressions separated by a comma.
      *
+     * @param <T> This is the type parameter
      * @param expression The {@link AbstractDoubleEncapsulatedExpression} to validate
      * @param helper This helper is used to retrieve specific information related to the {@link
      * AbstractDoubleEncapsulatedExpression expression} being validated
@@ -3032,7 +3035,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
                 int endPosition = startPosition;
 
                 for (int index = 1; index < length; index++) {
-                    if (Character.isWhitespace(dateTime.charAt(index))) {
+                    if (ExpressionTools.isWhiteSpace(dateTime.charAt(index))) {
                         break;
                     }
                     endPosition++;
@@ -3050,7 +3053,7 @@ public abstract class AbstractGrammarValidator extends AbstractValidator {
                 for (int index = 1; index < length; index++) {
                     startPosition++;
 
-                    if (Character.isWhitespace(dateTime.charAt(index))) {
+                    if (ExpressionTools.isWhiteSpace(dateTime.charAt(index))) {
                         break;
                     }
                 }

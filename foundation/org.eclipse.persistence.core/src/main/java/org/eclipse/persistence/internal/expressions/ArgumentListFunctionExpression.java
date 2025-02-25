@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 1998, 2019 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2022 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -57,7 +58,6 @@ public class ArgumentListFunctionExpression extends FunctionExpression {
             super.addChild(argument);
         }
         setBaseExpression(getChildren().firstElement());
-        ((ListExpressionOperator)operator).incrementNumberOfItems();
     }
 
     /**
@@ -88,7 +88,6 @@ public class ArgumentListFunctionExpression extends FunctionExpression {
     public void setOperator(ExpressionOperator theOperator) {
         assert(theOperator instanceof ListExpressionOperator);
         super.setOperator(theOperator);
-        ((ListExpressionOperator)theOperator).setNumberOfItems(0);
     }
 
     /**
@@ -97,16 +96,26 @@ public class ArgumentListFunctionExpression extends FunctionExpression {
      */
     @Override
     public void printSQL(ExpressionSQLPrinter printer) {
-        ListExpressionOperator platformOperator = (ListExpressionOperator)getPlatformOperator(printer.getPlatform());
-        platformOperator.copyTo(operator);
-        ((ListExpressionOperator)operator).setIsComplete(true);
-        operator.printCollection(getChildren(), printer);
+        ListExpressionOperator realOperator;
+        realOperator = (ListExpressionOperator)getPlatformOperator(printer.getPlatform());
+        operator.copyTo(realOperator);
+        ((ListExpressionOperator) realOperator).setIsComplete(true);
+        realOperator.printCollection(this.children, printer);
     }
-
 
     @Override
     protected void postCopyIn(Map alreadyDone) {
-        ((ListExpressionOperator)operator).setNumberOfItems(0);
+        /*
+         * Bug 463042: All ArgumentListFunctionExpression instances store the same operator reference.
+         * Unfortunately, ListExpressionOperator.numberOfItems stores state. If multiple ArgumentListFunctionExpression
+         * are run concurrently, then the ListExpressionOperator.numberOfItems state shared by all instances
+         * becomes inconsistent. A solution is to make sure each ArgumentListFunctionExpression has a unique operator
+         * reference.
+         */
+        final ListExpressionOperator originalOperator = ((ListExpressionOperator) this.operator);
+        this.operator = new ListExpressionOperator();
+        originalOperator.copyTo(this.operator);
+
         Boolean hasLastChildCopy = hasLastChild;
         hasLastChild = null;
         super.postCopyIn(alreadyDone);
@@ -119,9 +128,5 @@ public class ArgumentListFunctionExpression extends FunctionExpression {
     @Override
     public void initializePlatformOperator(DatabasePlatform platform) {
         super.initializePlatformOperator(platform);
-        ((ListExpressionOperator)platformOperator).setNumberOfItems(((ListExpressionOperator)operator).getNumberOfItems());
     }
-
-
 }
-

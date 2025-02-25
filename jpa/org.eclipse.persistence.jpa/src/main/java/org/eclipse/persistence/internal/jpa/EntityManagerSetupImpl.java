@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1998, 2021 Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 1998, 2021 IBM Corporation. All rights reserved.
+ * Copyright (c) 1998, 2023 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -182,7 +182,6 @@ import org.eclipse.persistence.config.LoggerType;
 import org.eclipse.persistence.config.ParserType;
 import org.eclipse.persistence.config.PersistenceUnitProperties;
 import org.eclipse.persistence.config.ProfilerType;
-import org.eclipse.persistence.config.PropertiesUtils;
 import org.eclipse.persistence.config.RemoteProtocol;
 import org.eclipse.persistence.config.SessionCustomizer;
 import org.eclipse.persistence.descriptors.ClassDescriptor;
@@ -206,7 +205,6 @@ import org.eclipse.persistence.exceptions.ValidationException;
 import org.eclipse.persistence.internal.databaseaccess.BatchWritingMechanism;
 import org.eclipse.persistence.internal.databaseaccess.DatabaseAccessor;
 import org.eclipse.persistence.internal.databaseaccess.DatasourcePlatform;
-import org.eclipse.persistence.internal.databaseaccess.Platform;
 import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy;
 import org.eclipse.persistence.internal.descriptors.OptimisticLockingPolicy.LockOnChange;
 import org.eclipse.persistence.internal.helper.ClassConstants;
@@ -256,7 +254,6 @@ import org.eclipse.persistence.jpa.metadata.MetadataSource;
 import org.eclipse.persistence.jpa.metadata.ProjectCache;
 import org.eclipse.persistence.jpa.metadata.XMLMetadataSource;
 import org.eclipse.persistence.logging.AbstractSessionLog;
-import org.eclipse.persistence.logging.DefaultSessionLog;
 import org.eclipse.persistence.logging.SessionLog;
 import org.eclipse.persistence.platform.database.converters.StructConverter;
 import org.eclipse.persistence.platform.database.events.DatabaseEventListener;
@@ -770,10 +767,6 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                                 } else {
                                     login(getDatabaseSession(), deployProperties, requiresConnection);
                                 }
-
-                                final Platform platform = getDatabaseSession().getDatasourcePlatform();
-                                String dbProperties = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.TARGET_DATABASE_PROPERTIES, deployProperties, this.session);
-                                PropertiesUtils.set(platform, PersistenceUnitProperties.TARGET_DATABASE_PROPERTIES, dbProperties);
 
                                 // Make JTA integration throw JPA exceptions.
                                 if (this.session.hasExternalTransactionController()) {
@@ -2844,6 +2837,11 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 session.getPlatform().setShouldForceBindAllParameters(Boolean.parseBoolean(shouldForceBindString));
             }
 
+            String allowPartialBindString = getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.JDBC_ALLOW_PARTIAL_PARAMETERS, m, session);
+            if(allowPartialBindString != null) {
+                session.getPlatform().setShouldBindPartialParameters(Boolean.parseBoolean(allowPartialBindString));
+            }
+
             updateLogins(m);
         }
         if (!session.getDatasourceLogin().shouldUseExternalTransactionController()) {
@@ -2896,6 +2894,7 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
             updateAllowExtendedThreadLogging(m);
             updateAllowExtendedThreadLoggingThreadDump(m);
             updateTemporalMutableSetting(m);
+            updateAllowQueryResultsCacheValidation(m);
             updateTableCreationSettings(m);
             updateIndexForeignKeys(m);
             if (!session.hasBroker()) {
@@ -3969,6 +3968,24 @@ public class EntityManagerSetupImpl implements MetadataRefreshListener {
                 session.getProject().setAllowExtendedThreadLoggingThreadDump(false);
             } else {
                 session.handleException(ValidationException.invalidBooleanValueForProperty(allowExtendedThreadLoggingThreadDump, PersistenceUnitProperties.THREAD_EXTENDED_LOGGING_THREADDUMP));
+            }
+        }
+    }
+
+    /**
+     * Enable or disable query result cache validation.
+     * The method needs to be called in deploy stage.
+     */
+    protected void updateAllowQueryResultsCacheValidation(Map m){
+        String allowQueryResultsCacheValidation = EntityManagerFactoryProvider.getConfigPropertyAsStringLogDebug(PersistenceUnitProperties.QUERY_RESULTS_CACHE_VALIDATION, m, session);
+
+        if (allowQueryResultsCacheValidation != null) {
+            if (allowQueryResultsCacheValidation.equalsIgnoreCase("true")) {
+                session.getProject().setAllowQueryResultsCacheValidation(true);
+            } else if (allowQueryResultsCacheValidation.equalsIgnoreCase("false")) {
+                session.getProject().setAllowQueryResultsCacheValidation(false);
+            } else {
+                session.handleException(ValidationException.invalidBooleanValueForProperty(allowQueryResultsCacheValidation, PersistenceUnitProperties.QUERY_RESULTS_CACHE_VALIDATION));
             }
         }
     }

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1998, 2021 Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 1998, 2021 IBM Corporation. All rights reserved.
+ * Copyright (c) 1998, 2023 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2022 IBM Corporation. All rights reserved.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -1016,18 +1016,39 @@ public class PersistenceUnitProperties {
     public static final String PARTITIONING_CALLBACK = "eclipselink.partitioning.callback";
 
     /**
-     * Property "<code>eclipselink.jdbc.bind-parameters</code>" configures whether parameter binding will be used in the
-     * creation of JDBC prepared statements. Usage of parameter binding is
-     * generally a performance optimization allowing for SQL and prepared
-     * statement caching as well as usage of batch writing.
+     * Property "<code>eclipselink.jdbc.bind-parameters</code>" configures whether parameter binding 
+     * should be used in the creation of JDBC prepared statements.
+     * <p>
+     * Usage of parameter binding is generally a performance optimization; 
+     * allowing for SQL and prepared statement caching, as well as usage of batch writing. 
      * <p>
      * <b>Allowed Values:</b>
      * <ul>
-     * <li>"<code>false</code>" - values will be written literally into the generated SQL
-     * <li>"<code>true</code>" (DEFAULT) - binding will be used
+     * <li>"<code>false</code>" - all values will be written literally into the generated SQL
+     * <li>"<code>true</code>" (DEFAULT) - all values will be bound as parameters in the generated SQL
      * </ul>
      */
     public static final String JDBC_BIND_PARAMETERS = "eclipselink.jdbc.bind-parameters";
+
+    /**
+     * Property "<code>eclipselink.jdbc.allow-partial-bind-parameters</code>" configures whether 
+     * partial parameter binding should be allowed in the creation of JDBC prepared statements.
+     * <p>
+     * EclipseLink determines binding behavior based on the database platform's support for binding.
+     * If the database platform doesn't support binding for a specific expression, EclipseLink disables
+     * all binding for the whole query. Setting this property to 'true' will allow EclipseLink to bind
+     * per expression, instead of per query.
+     * <p>
+     * Usage of parameter binding is generally a performance optimization; 
+     * allowing for SQL and prepared statement caching, as well as usage of batch writing. 
+     * <p>
+     * <b>Allowed Values:</b>
+     * <ul>
+     * <li>"<code>false</code>" (DEFAULT) - EclipseLink either binds all parameters or no parameters; depending on database support
+     * <li>"<code>true</code>" - EclipseLink binds parameters per SQL function/expression
+     * </ul>
+     */
+    public static final String JDBC_ALLOW_PARTIAL_PARAMETERS = "eclipselink.jdbc.allow-partial-bind-parameters";
 
     /**
      * Property "<code>eclipselink.jdbc.force-bind-parameters</code>" enables parameter binding
@@ -1868,6 +1889,13 @@ public class PersistenceUnitProperties {
      *
      * {@code
      *  <property name="eclipselink.target-database-properties" value="shouldBindLiterals=true"/>}
+     * <p>
+     * <b> Example 2 : </b> To change the value of
+     * DatabasePlatform.supportsReturnGeneratedKeys via configuration, provide the
+     * following :<br><br>
+     * 
+     * {@code
+     *  <property name="eclipselink.target-database-properties" value="supportsReturnGeneratedKeys=true"/>}
      * @see TargetDatabase
      * @see DatabasePlatform
      */
@@ -4117,6 +4145,21 @@ public class PersistenceUnitProperties {
      * </p>
      */
     public static final String CONCURRENCY_SEMAPHORE_LOG_TIMEOUT = "eclipselink.concurrency.semaphore.log.timeout";
+
+    /**
+     * <p>
+     * This property control (enable/disable) query result cache validation in {@link org.eclipse.persistence.internal.sessions.UnitOfWorkImpl#internalExecuteQuery}
+     * </p>
+     * This can be used to help debugging an object identity problem. An object identity problem is when an managed/active entity in the cache references an entity not in managed state.
+     * This method will validate that objects in query results (object tree) are in a correct state. As a result there are new log messages in the log.
+     * It's related with "read" queries like <code>em.find(...);</code> or JPQL queries like <code>SELECT e FROM Entity e</code>.
+     * It should be controlled at query level too by query hint {@link org.eclipse.persistence.config.QueryHints#QUERY_RESULTS_CACHE_VALIDATION}
+     * <ul>
+     * <li>"<code>true</code>" - validate query result object tree and if content is not valid print diagnostic messages. In this case there should be negative impact to the performance.
+     * <li>"<code>false</code>" (DEFAULT) - don't validate and print any diagnostic messages
+     * </ul>
+     */
+    public static final String QUERY_RESULTS_CACHE_VALIDATION = "eclipselink.query-results-cache.validation";
 
     /**
      * INTERNAL: The following properties will not be displayed through logging
