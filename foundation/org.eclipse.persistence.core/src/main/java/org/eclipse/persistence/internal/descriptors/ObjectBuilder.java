@@ -57,6 +57,7 @@ import org.eclipse.persistence.descriptors.FetchGroupManager;
 import org.eclipse.persistence.descriptors.InheritancePolicy;
 import org.eclipse.persistence.descriptors.changetracking.ChangeTracker;
 import org.eclipse.persistence.descriptors.changetracking.ObjectChangePolicy;
+import org.eclipse.persistence.descriptors.SelectedFieldsLockingPolicy;
 import org.eclipse.persistence.exceptions.DatabaseException;
 import org.eclipse.persistence.exceptions.DescriptorException;
 import org.eclipse.persistence.exceptions.QueryException;
@@ -3059,6 +3060,14 @@ public class ObjectBuilder extends CoreObjectBuilder<AbstractRecord, AbstractSes
                 } else {
                     expression = expression.and(subExpression);
                 }
+            }
+        }
+
+        OptimisticLockingPolicy optimisticLockingPolicy = this.descriptor.getOptimisticLockingPolicy();
+        if (optimisticLockingPolicy instanceof SelectedFieldsLockingPolicy) {
+            List<DatabaseField> databaseFieldList = ((SelectedFieldsLockingPolicy) optimisticLockingPolicy).getLockFields();
+            for (DatabaseField field : databaseFieldList) {
+                ((ExpressionBuilder)builder).newDerivedField(field);
             }
         }
 
